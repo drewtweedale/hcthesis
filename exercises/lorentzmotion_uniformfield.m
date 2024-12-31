@@ -1,3 +1,6 @@
+% This file is merely to graphically display the solutions for
+% assignment 1.
+
 % Parameters
 q = 1.6e-19;      % Charge of the proton (Coulombs)
 m = 1.67e-27;     % Mass of the proton (kg)
