@@ -40,13 +40,13 @@ for i = 1:n_steps-1
     % Electric field (zero in this case)
     E = [0, 0, 0];
     
-    % Magnetic field force
+    % Boris rotation step
     t_b = (q / m) * 0.5 * dt * B;
     v_minus = v(i, :) + dt * 0.5 * q * E / m; 
     
     % Rotation due to magnetic field
     v_prime = v_minus + cross(v_minus, t_b); 
-    v_plus = v_prime / (1 + norm(t_b)^2);
+    v_plus = v_minus + 2 / (1 + norm(t_b)^2) * cross(v_prime, t_b);
     
     % Full velocity update
     v(i+1, :) = v_plus + 0.5 * dt * q * E / m;
