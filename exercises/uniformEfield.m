@@ -1,12 +1,12 @@
 % Parameters
 q_proton = 1.6e-19;  % Charge of a proton (C)
 m_proton = 1.67e-27; % Mass of a proton (kg)
-Bz = 31000e-9;       % Magnetic field in z-direction (T)
-Ey = 0.31;           % Electric field in y-direction (V/m)
+Bz = 31000e-9;       
+Ey = 0.31;           
 
 % Initial conditions
-v_perp = 1e5;        % Perpendicular velocity (m/s)
-v_par = 0;           % Parallel velocity (m/s)
+v_perp = 1e5;        %(m/s)
+v_par = 0;           %(m/s)
 v0 = [v_perp, 0, v_par]; % Initial velocity vector
 x0 = [0, 0, 0];      % Initial position vector
 
@@ -18,12 +18,12 @@ t = 0:dt:t_end;
 n_steps = length(t); % Number of time steps
 
 % Magnetic and electric fields
-B = [0, 0, Bz];      % Magnetic field vector
-E = [0, Ey, 0];      % Electric field vector
+B = [0, 0, Bz];      
+E = [0, Ey, 0];      
 
 % Arrays to store position and velocity
-x = zeros(n_steps, 3); % Position array
-v = zeros(n_steps, 3); % Velocity array
+x = zeros(n_steps, 3); 
+v = zeros(n_steps, 3); 
 
 % Set initial conditions
 x(1, :) = x0;
