@@ -6,8 +6,6 @@ RE = 6371e3;              % Earth radius (m)
 
 % Initial conditions
 r0 = [8 * RE, 0, 0];      % Starting position at 8RE
-v0 = [9.5e6, 0, 0];       % (9,500 km/s)
-% The fancy case:
 v0 = [9.5e6, 9.5e6, 0];
 
 % Time parameters
@@ -38,7 +36,7 @@ function B = dipole_field(r, B0, RE)
     B = [Bx, By, Bz];
 end
 
-% Leapfrog-Boris integration
+% Boris integration
 for i = 1:n_steps-1
     % Half-step position update
     x_mid = x(i, :) + 0.5 * dt * v(i, :);
@@ -53,7 +51,6 @@ for i = 1:n_steps-1
     % Rotation due to magnetic field
     v_prime = v_minus + cross(v_minus, t_b); 
     v_plus = v_minus + 2 / (1 + norm(t_b)^2) * cross(v_prime, t_b);
-    
     v(i+1, :) = v_plus + 0.5 * dt * q_proton * [0, 0, 0] / m_proton; % No electric field
     x(i+1, :) = x_mid + 0.5 * dt * v(i+1, :);
 end
@@ -61,22 +58,54 @@ end
 % Normalize positions in terms of Earth radii
 x_RE = x / RE;
 
+% Create a grid for magnetic field visualization
+[x_grid, y_grid, z_grid] = meshgrid(-20:1:20, -20:1:20, -20:1:20); % Grid in RE units
+x_grid = x_grid * RE; % Scale to meters
+y_grid = y_grid * RE;
+z_grid = z_grid * RE;
+
+% Compute magnetic field at each grid point
+Bx_grid = zeros(size(x_grid));
+By_grid = zeros(size(y_grid));
+Bz_grid = zeros(size(z_grid));
+for i = 1:size(x_grid, 1)
+    for j = 1:size(x_grid, 2)
+        for k = 1:size(x_grid, 3)
+            r = [x_grid(i, j, k), y_grid(i, j, k), z_grid(i, j, k)];
+            B = dipole_field(r, B0, RE);
+            Bx_grid(i, j, k) = B(1);
+            By_grid(i, j, k) = B(2);
+            Bz_grid(i, j, k) = B(3);
+        end
+    end
+end
+
 % Plot trajectory
 figure;
-plot3(x_RE(:, 1), x_RE(:, 2), x_RE(:, 3), 'b', 'LineWidth', 1.5);
+plot3(x_RE(:, 1), x_RE(:, 2), x_RE(:, 3), 'b', 'LineWidth', 2); % Particle trajectory
 hold on;
+
+% Plot Earth
 [x_earth, y_earth, z_earth] = sphere;
 surf(x_earth, y_earth, z_earth, 'FaceAlpha', 0.3, 'EdgeColor', 'none', 'FaceColor', 'green');
+
+% Plot magnetic field lines using streamline
+h = streamline(x_grid / RE, y_grid / RE, z_grid / RE, Bx_grid, By_grid, Bz_grid, startx / RE, starty / RE, startz / RE);
+
+% Set properties for the streamlines
+set(h, 'Color', 'r', 'LineWidth', 1);
+
+% Add labels and grid
 xlabel('x (R_E)');
 ylabel('y (R_E)');
 zlabel('z (R_E)');
-title('Trajectory of a Proton in Dipole Magnetic Field');
+title('Proton Trajectory and Dipole Magnetic Field Lines');
 grid on;
 view(3);
 axis equal;
 
 % Set axis limits
-axis([-10 10 -10 10 -10 10]);
+axis([-15 15 -15 15 -15 15]);
 
 % Display results
 fprintf('Gyration period: %.3e s\n', T_g);
