@@ -3,6 +3,7 @@ q_proton = 1.6e-19;       % (C)
 m_proton = 1.67e-27;      % (kg)
 B0 = 1.42e-5;             % Magnetic field strength at Neptune's equator (T)
 RN = 24622e3;             % Neptune radius (m)
+eta = 0;                  % Tilt angle 
 
 % Initial conditions
 r0 = [8 * RN, 0, 0];      % Starting position at 8RN
@@ -36,48 +37,28 @@ function B = dipole_field(r, B0, RN)
     B = [Bx, By, Bz];
 end
 
-function magnetic_field_heatmap(B0, RN)
-    % Create a grid for the x-y plane
-    [x_grid, y_grid] = meshgrid(-5:0.1:5, -5:0.1:5); 
-    x_grid = x_grid * RN; 
-    y_grid = y_grid * RN;
-    z_grid = zeros(size(x_grid)); % z = 0 for the x-y plane
+% Function to calculate quadrupole magnetic field with eta
+function B = quadrupole_field(r, RN, eta)
+    x = r(1); y = r(2); z = r(3);
+    Me = 3.12e-5; % Magnetic moment (scaled)
+    Re = RN; % Neptune radius
+    angle = eta * pi/2; % Tilt angle
     
-    % Compute magnetic field at each grid point
-    B_magnitude = zeros(size(x_grid)); % Array to store magnetic field strength
-    for i = 1:size(x_grid, 1)
-        for j = 1:size(x_grid, 2)
-            r = [x_grid(i, j), y_grid(i, j), z_grid(i, j)];
-            B = dipole_field(r, B0, RN);
-            B_magnitude(i, j) = log10(norm(B)); % Compute magnetic field strength
-        end
-    end
+    % Quadrupole field formulas with eta
+    Bx = -(2.5 * x * (z^2 - y^2) * Me * Re^4) / (sqrt(x^2 + y^2 + z^2))^7 * sin(angle) + ...
+          ((x^2 * y - 1.5 * y^3 + 3.5 * y * z^2) * Me * Re^4) / (sqrt(x^2 + y^2 + z^2))^7 * cos(angle);
+    By = -((x^2 * y - 1.5 * y^3 + 3.5 * y * z^2) * Me * Re^4) / (sqrt(x^2 + y^2 + z^2))^7 * sin(angle) + ...
+          (2.5 * x * (z^2 - y^2) * Me * Re^4) / (sqrt(x^2 + y^2 + z^2))^7 * cos(angle);
+    Bz = -((-x^2 * z + 1.5 * z^3 - 3.5 * z * y^2) * Me * Re^4) / (sqrt(x^2 + y^2 + z^2))^7;
     
-    % Plot the heat map
-    figure;
-    
-    % Create the heatmap with field values
-    h = pcolor(x_grid/RN, y_grid/RN, B_magnitude);
-    set(h, 'EdgeColor', 'none');
-    shading interp;
-    
-    hold on;
-    
-    % Add a small black circle at the origin
-    r_origin = 0.05; % Radius of the black circle in RN units
-    th = linspace(0, 2*pi, 100);
-    x_circle = r_origin * cos(th);
-    y_circle = r_origin * sin(th);
-    fill(x_circle, y_circle, 'k'); % 'k' for black
-    
-    % Add colorbar and labels
-    cb = colorbar;
-    ylabel(cb, 'log_{10}(|B|)');
-    xlabel('x (R_N)');
-    ylabel('y (R_N)');
-    title('Magnetic Field Strength on the x-y Plane (|B|)');
-    axis equal;
-    hold off;
+    B = [Bx, By, Bz];
+end
+
+% Function to calculate combined magnetic field (dipole + quadrupole)
+function B = combined_field(r, B0, RN, eta)
+    B_dipole = dipole_field(r, B0, RN);
+    B_quadrupole = quadrupole_field(r, RN, eta);
+    B = B_dipole + B_quadrupole; % Combine dipole and quadrupole fields
 end
 
 % Initialize particle hit counter
@@ -88,8 +69,8 @@ for i = 1:n_steps-1
     % Half-step position update
     x_mid = x(i, :) + 0.5 * dt * v(i, :);
     
-    % Calculate magnetic field at midpoint
-    B = dipole_field(x_mid, B0, RN);
+    % Calculate magnetic field at midpoint (combined dipole and quadrupole)
+    B = combined_field(x_mid, B0, RN, eta);
     
     % Boris rotation step
     t_b = (q_proton / m_proton) * 0.5 * dt * B;
@@ -124,7 +105,7 @@ for i = 1:size(x_grid, 1)
     for j = 1:size(x_grid, 2)
         for k = 1:size(x_grid, 3)
             r = [x_grid(i, j, k), y_grid(i, j, k), z_grid(i, j, k)];
-            B = dipole_field(r, B0, RN);
+            B = combined_field(r, B0, RN, eta); % Use combined field
             Bx_grid(i, j, k) = B(1);
             By_grid(i, j, k) = B(2);
             Bz_grid(i, j, k) = B(3);
@@ -147,14 +128,13 @@ startx = 10 * RN * cos(theta); % Starting points in the x-y plane
 starty = 10 * RN * sin(theta);
 startz = RN * ones(size(theta)); 
 
-
 % Plot magnetic field lines using streamline
 for i = 1:length(theta)
     % Positive charges
     positiveq = streamline(x_grid / RN, y_grid / RN, z_grid / RN, Bx_grid, By_grid, Bz_grid, startx(i) / RN, starty(i) / RN, startz(i) / RN);
     set(positiveq, 'Color', 'r', 'LineWidth', 1);
     
-    % Negative charges to get full magnetic field lines.
+    % Negative charges to get full magnetic field lines
     negativeq = streamline(x_grid / RN, y_grid / RN, z_grid / RN, -1 * Bx_grid, -1 * By_grid, -1 * Bz_grid, startx(i) / RN, starty(i) / RN, startz(i) / RN);
     set(negativeq, 'Color', 'r', 'LineWidth', 1);
 end
@@ -163,7 +143,7 @@ end
 xlabel('x (R_N)');
 ylabel('y (R_N)');
 zlabel('z (R_N)');
-title('Proton Trajectory and Dipole Magnetic Field Lines Around Neptune');
+title('Proton Trajectory and Combined Magnetic Field Lines Around Neptune');
 grid on;
 view(3);
 axis equal;
@@ -175,6 +155,3 @@ axis([-15 15 -15 15 -15 15]);
 fprintf('Gyration period: %.3e s\n', T_g);
 fprintf('Simulation time: %.3e s\n', t_end);
 fprintf('Total particle collisions with Neptune: %d\n', particle_hit_count);
-
-% Call the function to plot the heat map
-magnetic_field_heatmap(B0, RN);
