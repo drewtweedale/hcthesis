@@ -3,7 +3,7 @@ q_proton = 1.6e-19;       % (C)
 m_proton = 1.67e-27;      % (kg)
 B0 = 1.42e-5;             % Magnetic field strength at Neptune's equator (T)
 RN = 24622e3;             % Neptune radius (m)
-eta = 1;                  % Tilt angle 
+eta = 1;                 
 
 % Initial conditions
 r0 = [8 * RN, 0, 0];      % Starting position at 8RN
@@ -68,7 +68,7 @@ for i = 1:size(x_grid, 1)
     for j = 1:size(x_grid, 2)
         for k = 1:size(x_grid, 3)
             r = [x_grid(i, j, k), y_grid(i, j, k), z_grid(i, j, k)];
-            B = combined_field(r, B0, RN, eta); % Use combined field
+            B = combined_field(r, B0, RN, eta);
             Bx_grid(i, j, k) = B(1);
             By_grid(i, j, k) = B(2);
             Bz_grid(i, j, k) = B(3);
@@ -78,44 +78,42 @@ end
 
 % Plot trajectory
 figure;
-% plot3(x_RN(:, 1), x_RN(:, 2), x_RN(:, 3), 'b', 'LineWidth', 2); % Particle trajectory
+plot3(x_RN(:, 1), x_RN(:, 2), x_RN(:, 3), 'b', 'LineWidth', 2); % Particle trajectory
 hold on;
 
 % Plot Neptune
 [x_neptune, y_neptune, z_neptune] = sphere;
 surf(x_neptune, y_neptune, z_neptune, 'FaceAlpha', 0.3, 'EdgeColor', 'none', 'FaceColor', 'blue');
 
-% Define starting points for quadrupole field lines in a circle around Neptune on the equatorial plane
+% Define starting points for magnetic field lines
 num_streamlines = 100;
 theta = linspace(0, 2*pi, num_streamlines);
-radius = 5 * RN; % Radius of the circle in RN units
+radius = 5 * RN;
 startx = radius * cos(theta);
 starty = radius * sin(theta);
-startz = .5 * RN * ones(size(startx)); % All points in the equatorial plane (z=0)
+startz = .5 * RN * ones(size(startx)); % Slightly above equator
 
-% Plot magnetic field lines using streamline in a for loop
+% Plot magnetic field lines
 streamline_color = 'r';
 
 for i = 1:num_streamlines
-    % Plot magnetic field lines using streamline (original axes)
     h = streamline(x_grid / RN, y_grid / RN, z_grid / RN, Bx_grid, By_grid, Bz_grid, startx(i) / RN, starty(i) / RN, startz(i) / RN);
-    % Plot magnetic field lines using streamline (reversed axes)
     g = streamline(x_grid / RN, y_grid / RN, z_grid / RN, -1 * Bx_grid, -1 * By_grid, -1 * Bz_grid, startx(i) / RN, starty(i) / RN, startz(i) / RN);
-    hneg = streamline(x_grid / RN, y_grid / RN, z_grid / RN, Bx_grid, By_grid, Bz_grid, startx(i) / RN, starty(i) / RN, -1 * startz(i) / RN);
-    % Plot magnetic field lines using streamline (reversed axes)
-    gneg = streamline(x_grid / RN, y_grid / RN, z_grid / RN, -1 * Bx_grid, -1 * By_grid, -1 * Bz_grid, startx(i) / RN, starty(i) / RN, -1 * startz(i) / RN);
+    hnegz = streamline(x_grid / RN, y_grid / RN, z_grid / RN, Bx_grid, By_grid, Bz_grid, startx(i) / RN, starty(i) / RN, -1 * startz(i) / RN);
+    gnegz = streamline(x_grid / RN, y_grid / RN, z_grid / RN, -1 * Bx_grid, -1 * By_grid, -1 * Bz_grid, startx(i) / RN, starty(i) / RN, -1 * startz(i) / RN);
+    
     % Set properties for the streamlines
     set(h, 'Color', streamline_color, 'LineWidth', 1);
     set(g, 'Color', streamline_color, 'LineWidth', 1);
-    set(hneg, 'Color', streamline_color, 'LineWidth', 1);
-    set(gneg, 'Color', streamline_color, 'LineWidth', 1);
+    set(hnegz, 'Color', streamline_color, 'LineWidth', 1);
+    set(gnegz, 'Color', streamline_color, 'LineWidth', 1);
 end
 
 % Add labels and grid
 xlabel('x (R_N)');
 ylabel('y (R_N)');
 zlabel('z (R_N)');
-title('Proton Trajectory and Quadrupole Magnetic Field Lines Around Neptune');
+title('Combined Magnetic Field');
 grid on;
 view(3);
 axis equal;
@@ -127,3 +125,6 @@ axis([-15 15 -15 15 -15 15]);
 fprintf('Gyration period: %.3e s\n', T_g);
 fprintf('Simulation time: %.3e s\n', t_end);
 fprintf('Total particle collisions with Neptune: %d\n', particle_hit_count);
+
+% Generate heatmap of magnetic field strength in the x-y plane
+% heatmap(B0, RN, eta);
