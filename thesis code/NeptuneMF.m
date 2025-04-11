@@ -3,7 +3,15 @@ q_proton = 1.6e-19;       % (C)
 m_proton = 1.67e-27;      % (kg)
 B0 = 1.42e-5;             % Magnetic field strength at Neptune's equator (T)
 RN = 24622e3;             % Neptune radius (m)
-eta = 1;                 
+eta = 0;     
+g10 =  0.9732;
+g11 =  0.03220;
+h11 = -0.09889;
+g20 =  0.07448;
+g21 =  0.00664; 
+h21 =  0.11230;
+g22 =  0.04499;
+h22 = -0.00070;
 
 % Initial conditions
 r0 = [8 * RN, 0, 0];      % Starting position at 8RN
@@ -12,7 +20,7 @@ v0 = [9.5e6, 9.5e6, 9.5e6];   % Initial velocity (m/s)
 % Time parameters
 T_g = 2 * pi * m_proton / (q_proton * B0); % Gyration period
 dt = T_g / 100;           % Time step (s)
-t_end = 100000 * T_g;     % End time (simulate for 100000 gyrations)
+t_end = 300000 * T_g;     % End time (simulate for 100000 gyrations)
 t = 0:dt:t_end;          
 n_steps = length(t);      % Number of time steps for iteration
 
@@ -33,7 +41,7 @@ for i = 1:n_steps-1
     x_mid = x(i, :) + 0.5 * dt * v(i, :);
     
     % Calculate magnetic field at midpoint (combined dipole and quadrupole)
-    B = combined_field(x_mid, B0, RN, eta);
+    B = combined_field(x_mid, B0, RN, eta, g10, g11, h11, g20, g21, h21, g22, h22);
     
     % Boris rotation step
     t_b = (q_proton / m_proton) * 0.5 * dt * B;
@@ -68,13 +76,50 @@ for i = 1:size(x_grid, 1)
     for j = 1:size(x_grid, 2)
         for k = 1:size(x_grid, 3)
             r = [x_grid(i, j, k), y_grid(i, j, k), z_grid(i, j, k)];
-            B = combined_field(r, B0, RN, eta);
+            B = combined_field(r, B0, RN, eta, g10, g11, h11, g20, g21, h21, g22, h22);
             Bx_grid(i, j, k) = B(1);
             By_grid(i, j, k) = B(2);
             Bz_grid(i, j, k) = B(3);
         end
     end
 end
+
+num_points = 100;
+r_max = 20 * RN; % Maximum distance to analyze
+r_vals = linspace(0, r_max, num_points);
+B_strength = zeros(size(r_vals));
+
+for i = 1:num_points
+    % Create position vector at 45 degrees between x and z axes
+    r = r_vals(i) * [cosd(45), 0, sind(45)];
+    
+    % Calculate combined field at this point
+    B = combined_field(r, B0, RN, eta, g10, g11, h11, g20, g21, h21, g22, h22);
+    
+    % Store field magnitude
+    B_strength(i) = norm(B);
+end
+
+% Print field strength values to standard output
+fprintf('\nMagnetic field strength along z-x bisecting line:\n');
+fprintf('Distance (RN)\tField Strength (T)\n');
+for i = 1:10:num_points
+    fprintf('%.1f\t\t%.3e\n', r_vals(i)/RN, B_strength(i));
+end
+
+% Create figure showing field strength profile
+figure;
+semilogy(r_vals/RN, B_strength, 'LineWidth', 2);
+xlabel('Distance from center (R_N)');
+ylabel('Magnetic field strength (T)');
+title('Magnetic Field Strength Along z-x Bisecting Line');
+grid on;
+
+% Mark Neptune's radius
+hold on;
+plot([1 1], ylim, 'r--', 'LineWidth', 1.5);
+legend('Field strength', 'Neptune radius');
+hold off;
 
 % Plot trajectory
 figure;

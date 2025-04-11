@@ -1,11 +1,31 @@
-function B = dipole_field(r, B0, RN)
+function B = dipole_field(r, RN, varargin)
     x = r(1); y = r(2); z = r(3);
-    r_mag = sqrt(x^2 + y^2 + z^2); 
-    scale = (r_mag / RN)^3 * r_mag^2; % Scaling factor
-   
-    Bx = (-3 * B0 * x * z) / scale;
-    By = (-3 * B0 * y * z) / scale;
-    Bz = (B0 * (x^2 + y^2 - 2 * z^2)) / scale;
-   
+    r_mag = sqrt(x^2 + y^2 + z^2);
+    theta = acos(z/r_mag);
+    phi = atan2(y,x);
+    
+    % Parse inputs and compute moments
+    if nargin == 3
+        B0 = varargin{1};
+        Br = 2*B0*(RN^3/r_mag^3)*cos(theta);
+        Btheta = B0*(RN^3/r_mag^3)*sin(theta);
+        Bphi = 0;
+    else
+        % Schmidt coefficients case
+        g10 = varargin{1};
+        g11 = varargin{2};
+        h11 = varargin{3};
+        
+        % Spherical components
+        Br = 2*(RN/r_mag)^3*(g10*cos(theta) - (g11*cos(phi) + h11*sin(phi))*sin(theta));
+        Btheta = (RN/r_mag)^3*(g10*sin(theta) + (g11*cos(phi) + h11*sin(phi))*cos(theta));
+        Bphi = (RN/r_mag)^3*(g11*sin(phi) - h11*cos(phi));
+    end
+    
+    % Convert back to cartesian
+    Bx = (Br*sin(theta) + Btheta*cos(theta))*cos(phi) - Bphi*sin(phi);
+    By = (Br*sin(theta) + Btheta*cos(theta))*sin(phi) + Bphi*cos(phi);
+    Bz = Br*cos(theta) - Btheta*sin(theta);
+    
     B = [Bx, By, Bz];
 end
