@@ -18,7 +18,7 @@ h21 =  0.11230;
 g22 =  0.04499;
 h22 = -0.00070;
 
-% Neptune pole orientation (from JPL physical constants)
+% Neptune pole orientation
 ra = deg2rad(298.90);     % Right ascension
 dec = deg2rad(42.84);     % Declination
 
@@ -47,14 +47,14 @@ range_RN = clean_data(:,7);
 latitude = clean_data(:,8);
 longitude = clean_data(:,9);   
 Br_meas = clean_data(:,10);
-Btheta_meas = clean_data(:,11); % Southward component
-Bphi_meas = clean_data(:,12);   % Azimuthal component
+Btheta_meas = clean_data(:,11); 
+Bphi_meas = clean_data(:,12);   
 
 % Create datetime array
 time_datetime = datetime(year, 1, doy) + hours(hour) + minutes(minute) + seconds(second) + milliseconds(millisecond);
 
 % Apply longitude system correction (lambda_NLS = 360 - phi)
-phi = mod(360 - longitude, 360); % Convert to standard spherical phi
+phi = mod(360 - longitude, 360); % Convert to spherical phi
 
 % Convert to Cartesian coordinates with proper orientation
 theta = 90 - latitude; % Convert to co-latitude
@@ -69,7 +69,7 @@ B_model = zeros(length(range_RN),3);
 B_model_mag = zeros(length(range_RN),1);
     
 for i = 1:length(range_RN)
-    r = positions(i,:); % Use rotated position vector
+    r = positions(i,:)'; % Use rotated position vector
     B = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
     [Br_mod, Btheta_mod, Bphi_mod] = cart2sph_field(B, theta(i), phi(i));
     B_model(i,:) = [Br_mod, Btheta_mod, Bphi_mod];
