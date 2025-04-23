@@ -18,6 +18,10 @@ h21 =  0.11230;
 g22 =  0.04499;
 h22 = -0.00070;
 
+% ========================================================================
+% ROTATING COORDINATE SYSTEM SUCH THAT Z-AXIS = ROTATION AXIS
+% ========================================================================
+
 % Neptune pole orientation
 ra = deg2rad(298.90);     % Right ascension
 dec = deg2rad(42.84);     % Declination

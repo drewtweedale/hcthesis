@@ -4,11 +4,11 @@ function B = quadrupole_field(r, RN, B0, varargin)
     r_mag = sqrt(x^2 + y^2 + z^2);
     theta = acos(z/r_mag);
     phi = atan2(y,x);
-    
+
     % Parse inputs
     if nargin == 3
-        % Simple axial quadrupole case (maintains original working behavior)
-        g20 = 1 / (2 * RN^4);  
+        % Simple axial quadrupole case
+        g20 = 1 / (2 * RN^4); % Pulled from Vogt paper, but unsure about the scaling.
         g21 = 0;
         h21 = 0;
         g22 = 0;
@@ -50,8 +50,8 @@ function B = quadrupole_field(r, RN, B0, varargin)
         2 * (-g22 * sin(2*phi) + h22 * cos(2*phi)) * P22 / sin(theta) );
     
     % Convert to Cartesian 
-    Bx_sph = (Br*sin(theta) + Btheta*cos(theta))*cos(phi) + Bphi*sin(phi);  
-    By_sph = (Br*sin(theta) + Btheta*cos(theta))*sin(phi) - Bphi*cos(phi); 
+    Bx_sph = Br*sin(theta)*cos(phi) + Btheta*cos(theta)*cos(phi) + Bphi*sin(phi);
+    By_sph = Br*sin(theta)*sin(phi) + Btheta*cos(theta)*sin(phi) - Bphi*cos(phi);
     Bz_sph = Br*cos(theta) - Btheta*sin(theta);
     
     B = [Bx_sph, By_sph, Bz_sph];
