@@ -17,28 +17,6 @@ g21 =  0.00664;
 h21 =  0.11230;
 g22 =  0.04499;
 h22 = -0.00070;
-
-% ========================================================================
-% ROTATING COORDINATE SYSTEM SUCH THAT Z-AXIS = ROTATION AXIS
-% ========================================================================
-
-% Neptune pole orientation
-ra = deg2rad(298.90);     % Right ascension
-dec = deg2rad(42.84);     % Declination
-
-% Rotation matrix (RyRz)
-R = [cos(ra)*cos(dec), -sin(ra), -cos(ra)*sin(dec);
-     sin(ra)*cos(dec),  cos(ra), -sin(ra)*sin(dec);
-     sin(dec),          0,        cos(dec)];
-
-% Helper function to convert Cartesian B to spherical
-function [Br, Btheta, Bphi] = cart2sph_field(B, theta_deg, phi_deg)
-    theta = deg2rad(theta_deg);
-    phi = deg2rad(phi_deg);
-    Br = B(1)*sin(theta)*cos(phi) + B(2)*sin(theta)*sin(phi) + B(3)*cos(theta);
-    Btheta = B(1)*cos(theta)*cos(phi) + B(2)*cos(theta)*sin(phi) - B(3)*sin(theta);
-    Bphi = -B(1)*sin(phi) + B(2)*cos(phi);
-end
     
 % Extract cleaned columns
 year = 1900 + clean_data(:,1);  % Convert from YY format
@@ -60,10 +38,10 @@ time_datetime = datetime(year, 1, doy) + hours(hour) + minutes(minute) + seconds
 % Apply longitude system correction (lambda_NLS = 360 - phi)
 phi = mod(360 - longitude, 360); % Convert to spherical phi
 
-% Convert to Cartesian coordinates with proper orientation
+% Convert to Cartesian coordinates for field line and particle calculations
 theta = 90 - latitude; % Convert to co-latitude
 [x,y,z] = sph2cart(deg2rad(phi), deg2rad(theta), range_RN*RN);
-positions = [x,y,z] * R'; 
+positions = [x,y,z]; 
 
 % Calculate measured field magnitude
 B_meas = sqrt(Br_meas.^2 + Btheta_meas.^2 + Bphi_meas.^2);
@@ -73,18 +51,18 @@ B_model = zeros(length(range_RN),3);
 B_model_mag = zeros(length(range_RN),1);
     
 for i = 1:length(range_RN)
-    r = positions(i,:)'; % Use rotated position vector
-    B = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
-    [Br_mod, Btheta_mod, Bphi_mod] = cart2sph_field(B, theta(i), phi(i));
+    r = positions(i,:)'; % Use position vector directly
+    [Br_mod, Btheta_mod, Bphi_mod] = OTD(r, B0, RN);
+    % [Br_mod, Btheta_mod, Bphi_mod] = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
     B_model(i,:) = [Br_mod, Btheta_mod, Bphi_mod];
-    B_model_mag(i) = norm(B);
+    B_model_mag(i) = sqrt(Br_mod^2 + Btheta_mod^2 + Bphi_mod^2);
 end
 
 % =========================================================================
 % PLOTTING FIGURES
 % =========================================================================
 
-% Figure 1: Voyager 2 Trajectory with Rotation Axis
+% Figure 1: Voyager 2 Trajectory
 figure(1);
 plot3(positions(:,1)/RN, positions(:,2)/RN, positions(:,3)/RN, 'b-', 'LineWidth', 2);
 hold on;
@@ -147,7 +125,6 @@ plot(time_hours, Bphi_meas, 'b-', 'LineWidth', 1.5);
 hold on;
 plot(time_hours, B_model(:,3)*1e9, 'r--', 'LineWidth', 1.5);
 ylabel('B_{\phi} (nT)');
-title('Azimuthal Component');
 xlabel('Hours Since 1989-08-24T18:00:00');
 grid on;
 xlim([start_time end_time]);
@@ -190,7 +167,10 @@ for i = 1:n_steps-1
     x_mid = x(i, :) + 0.5 * dt * v(i, :);
     
     % Calculate magnetic field at midpoint (combined dipole and quadrupole)
-    B = combined_field(x_mid, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+    % [Br, Btheta, Bphi] = combined_field(x_mid, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+    [Br, Btheta, Bphi] = OTD(r, B0, RN);
+    [Bx, By, Bz] = sph2cart_field(Br, Btheta, Bphi, x_mid);
+    B = [Bx, By, Bz];
     
     % Boris rotation step
     t_b = (q_proton / m_proton) * 0.5 * dt * B;
@@ -229,10 +209,9 @@ for i = 1:size(x_grid, 1)
     for j = 1:size(x_grid, 2)
         for k = 1:size(x_grid, 3)
             r = [x_grid(i, j, k), y_grid(i, j, k), z_grid(i, j, k)];
-            B = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
-            Bx_grid(i, j, k) = B(1);
-            By_grid(i, j, k) = B(2);
-            Bz_grid(i, j, k) = B(3);
+            [Br, Btheta, Bphi] = OTD(r, B0, RN);
+            % [Br, Btheta, Bphi] = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+            [Bx_grid(i, j, k), By_grid(i, j, k), Bz_grid(i, j, k)] = sph2cart_field(Br, Btheta, Bphi, r);
         end
     end
 end
@@ -288,3 +267,15 @@ axis([-15 15 -15 15 -15 15]);
 fprintf('Gyration period: %.3e s\n', T_g);
 fprintf('Simulation time: %.3e s\n', t_end);
 fprintf('Total particle collisions with Neptune: %d\n', particle_hit_count);
+
+% Helper function to convert spherical field components to cartesian at a position
+function [Bx, By, Bz] = sph2cart_field(Br, Btheta, Bphi, r)
+    x = r(1); y = r(2); z = r(3);
+    r_mag = norm(r);
+    theta = acos(z/r_mag);
+    phi = atan2(y,x);
+    
+    Bx = Br*sin(theta)*cos(phi) + Btheta*cos(theta)*cos(phi) - Bphi*sin(phi);
+    By = Br*sin(theta)*sin(phi) + Btheta*cos(theta)*sin(phi) + Bphi*cos(phi);
+    Bz = Br*cos(theta) - Btheta*sin(theta);
+end
