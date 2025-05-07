@@ -3,7 +3,7 @@ q_proton = 1.6e-19;       % (C)
 m_proton = 1.67e-27;      % (kg)
 B0 = 1.42e-5;            % (T)
 RN = 24765e3;            % (m)
-offset_z = 0.5 * RN;      % (m)
+offset_z = .5 * RN;      % (m)
 KE_total = 1e6 * q_proton; % (eV)
 
 % Radial distances to test
@@ -13,12 +13,23 @@ colors = lines(length(radial_distances)); % Different color for each distance
 % Initialize results storage
 results = struct('radius', num2cell(radial_distances), ...
                 'eq_pitch_angles', [], ...
-                'final_loss_angles', []);
+                'final_loss_angles', [], ...
+                'loss_cone_angle', []); % New field for loss cone angle
 
 % Main simulation loop over radial distances
 for r_idx = 1:length(radial_distances)
     current_R = radial_distances(r_idx);
     fprintf('\n=== Testing R = %.1f R_N ===\n', current_R/RN);
+    
+    % Calculate expected loss cone angle for this radial distance
+    L = current_R / RN;
+    sin2_theta_loss = (4*L^6 - 3*L^5)^(-1/2);
+    if sin2_theta_loss <= 1 && sin2_theta_loss >= 0
+        theta_loss = asind(sqrt(sin2_theta_loss));
+    else
+        theta_loss = NaN; % Loss cone angle is not physically meaningful
+    end
+    results(r_idx).loss_cone_angle = theta_loss;
     
     % Initialize storage for this radial distance
     eq_angles = [];
@@ -27,7 +38,7 @@ for r_idx = 1:length(radial_distances)
     
     % First pass: coarse 15° steps from 0° to 90°
     stable_angle_found = false;
-    for pitch_angle_deg = 0:15:90
+    for pitch_angle_deg = 0:1:90
         fprintf('Testing pitch angle %d° at R=%.1f R_N... ', pitch_angle_deg, current_R/RN);
         
         % Run simulation with original Boris algorithm
@@ -94,6 +105,12 @@ for r_idx = 1:length(radial_distances)
         % Create dummy plot for legend (with the same style as the actual plots)
         plot(NaN, NaN, '-o', 'Color', colors(r_idx,:), 'MarkerSize', 5, 'MarkerFaceColor', colors(r_idx,:), ...
              'DisplayName', sprintf('%.1f R_N', radial_distances(r_idx)/RN));
+    end
+    
+    % Plot vertical dashed line for loss cone angle if it's within 0-90°
+    if ~isnan(results(r_idx).loss_cone_angle) && results(r_idx).loss_cone_angle >= 0 && results(r_idx).loss_cone_angle <= 90
+        xline(results(r_idx).loss_cone_angle, '--', 'Color', colors(r_idx,:), ...
+              'LineWidth', 1.5, 'HandleVisibility', 'off');
     end
 end
 
