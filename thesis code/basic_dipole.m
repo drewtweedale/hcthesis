@@ -1,14 +1,13 @@
-function [Br, Btheta, Bphi] = OTD(r, B0, RN)
-    x = r(1); 
-    y = r(2);
-    z = r(3);
+function B = basic_dipole(r, B0, RN)
+    % Position components
+    x = r(1); y = r(2); z = r(3);
+    r_mag = sqrt(x^2 + y^2 + z^2);
+    scale = (r_mag / RN)^3 * r_mag^2;
     
-    r_mag = norm([x, y, z]);  % Magnitude in meters
-    theta = acos(z/r_mag);    % Polar angle (from +z axis)
-    phi = atan2(y,x);         % Azimuthal angle
-    
-    % Dipole field components (standard equations)
-    Br = 2*B0*(RN^3/r_mag^3)*cos(theta);
-    Btheta = B0*(RN^3/r_mag^3)*sin(theta);
-    Bphi = 0;
+    % Original dipole field (z-aligned)
+    Bx = (-3 * B0 * x * z) / scale;
+    By = (-3 * B0 * y * z) / scale;
+    Bz = (B0 * (x^2 + y^2 - 2 * z^2)) / scale;
+
+    B = [Bx, By, Bz];
 end
