@@ -1,4 +1,4 @@
-% Load Voyager 2 data
+% Load and clean Voyager 2 data
 data = load('../magnetic_field_data/COMPREHE.ASC');
 INVALID_VALUE = 9999.99;
 invalid_rows = any(abs(data(:,10:12)) >= INVALID_VALUE, 2);
@@ -8,79 +8,76 @@ clean_data = data(~invalid_rows,:);
 q_proton = 1.6e-19;       % (C)
 m_proton = 1.67e-27;      % (kg)
 B0 = 1.42e-5;             % Magnetic field strength at Neptune's equator (T)
-RN = 24765e3;             % Neptune radius (m) from PDS file
-g10 =  0.09732;
-g11 =  0.03220;
+RN = 24765e3;             % Neptune radius (m)
+g10 =  0.09732; 
+g11 =  0.03220; 
 h11 = -0.09889;
-g20 =  0.07448;
+g20 =  0.07448; 
 g21 =  0.00664; 
 h21 =  0.11230;
-g22 =  0.04499;
+g22 =  0.04499; 
 h22 = -0.00070;
-    
-% Extract cleaned columns
-year = 1900 + clean_data(:,1);  % Convert from YY format
+
+% Rotation parameters
+rotation_period = 16.11 * 3600;  % Convert to seconds. 
+omega = 2 * pi / rotation_period; %
+t_ref = datetime(1989, 8, 25, 3, 56, 0); 
+
+% Extract cleaned data
+year = 1900 + clean_data(:,1);  
 doy = clean_data(:,2);
-hour = clean_data(:,3);
-minute = clean_data(:,4);
-second = clean_data(:,5);
-millisecond = clean_data(:,6);
-range_RN = clean_data(:,7);
-latitude = clean_data(:,8);
-longitude = clean_data(:,9);   
-Br_meas = clean_data(:,10);
-Btheta_meas = clean_data(:,11); 
-Bphi_meas = clean_data(:,12);   
+hour = clean_data(:,3); minute = clean_data(:,4); 
+second = clean_data(:,5); millisecond = clean_data(:,6);
+range_RN = clean_data(:,7); latitude = clean_data(:,8); 
+longitude = clean_data(:,9); Br_meas = clean_data(:,10);
+Btheta_meas = clean_data(:,11); Bphi_meas = clean_data(:,12);   
 
 % Create datetime array
-time_datetime = datetime(year, 1, doy) + hours(hour) + minutes(minute) + seconds(second) + milliseconds(millisecond);
+time_datetime = datetime(year, 1, doy) + hours(hour) + minutes(minute) + ...
+                seconds(second) + milliseconds(millisecond);
 
-% Apply longitude system correction (lambda_NLS = 360 - phi)
-phi = mod(360 - longitude, 360); % Convert to spherical phi
-
-% Convert to Cartesian coordinates for field line and particle calculations
-theta = 90 - latitude; % Convert to co-latitude
+% Coordinate conversion
+phi = mod(360 - longitude, 360); 
+theta = 90 - latitude; 
 [x,y,z] = sph2cart(deg2rad(phi), deg2rad(theta), range_RN*RN);
 positions = [x,y,z]; 
 
-% Calculate measured field magnitude
-B_meas = sqrt(Br_meas.^2 + Btheta_meas.^2 + Bphi_meas.^2);
-
-% Calculate model predictions at Voyager 2 positions
-B_model = zeros(length(range_RN),3);
-B_model_mag = zeros(length(range_RN),1);
-    
-for i = 1:length(range_RN)
-    r = positions(i,:)'; % Use position vector directly
-    [Br_mod, Btheta_mod, Bphi_mod] = OTD(r, B0, RN);
-    % [Br_mod, Btheta_mod, Bphi_mod] = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
-    B_model(i,:) = [Br_mod, Btheta_mod, Bphi_mod];
-    B_model_mag(i) = sqrt(Br_mod^2 + Btheta_mod^2 + Bphi_mod^2);
+% Rotate positions
+positions_rot = zeros(size(positions));
+for i = 1:length(time_datetime)
+    t_elapsed = seconds(time_datetime(i) - t_ref);
+    delta_phi = omega * t_elapsed;
+    R = [cos(delta_phi), -sin(delta_phi), 0;
+         sin(delta_phi),  cos(delta_phi), 0;
+         0,              0,              1];
+    positions_rot(i, :) = (R * positions(i, :)')';
 end
 
-% =========================================================================
-% PLOTTING FIGURES
-% =========================================================================
+% Field comparison
+B_meas = sqrt(Br_meas.^2 + Btheta_meas.^2 + Bphi_meas.^2);
+B_model = zeros(length(range_RN),3);
+for i = 1:length(range_RN)
+    r = positions_rot(i,:)'; 
+    [Br_mod, Btheta_mod, Bphi_mod] = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+    B_model(i,:) = [Br_mod, Btheta_mod, Bphi_mod];
+end
+B_model_mag = sqrt(sum(B_model.^2,2));
+
+% Plotting
+time_hours = hours(time_datetime - time_datetime(1)); 
+start_time = floor(min(time_hours));
+end_time = ceil(max(time_hours));
 
 % Figure 1: Voyager 2 Trajectory
 figure(1);
-plot3(positions(:,1)/RN, positions(:,2)/RN, positions(:,3)/RN, 'b-', 'LineWidth', 2);
+plot3(positions_rot(:,1)/RN, positions_rot(:,2)/RN, positions_rot(:,3)/RN, 'b-', 'LineWidth', 2);
 hold on;
 [x_neptune, y_neptune, z_neptune] = sphere(50);
 surf(x_neptune, y_neptune, z_neptune, 'FaceAlpha', 0.3, 'EdgeColor', 'none', 'FaceColor', 'blue');
-
-% Add rotation axis (dark green line)
-plot3([0 0], [0 0], [-3 3], 'Color', [0 0.5 0], 'LineWidth', 1);
-
 axis([-12 12 -12 12 -12 12]);
 xlabel('x (R_N)'); ylabel('y (R_N)'); zlabel('z (R_N)');
 title('Voyager 2 Trajectory in Neptune-Fixed Coordinates');
 grid on; view(45,30); axis equal;
-
-% Time formatting for plots
-time_hours = hours(time_datetime - time_datetime(1)); % Hours since start
-start_time = floor(min(time_hours));
-end_time = ceil(max(time_hours));
 
 % Figure 2: Field Magnitude Comparison
 figure(2);
@@ -135,147 +132,7 @@ for i = 1:3
     xline(ca_time, '--g', 'LineWidth', 1);
 end
 
-% ====================================================================================
-% BORIS ALGORITHM FOR PARTICLE TRACKING
-% ====================================================================================
-
-% Initial conditions
-r0 = [8 * RN, 0, 0];      % Starting position at 8RN
-v0 = [9.5e6, 9.5e6, 9.5e6];   % Initial velocity (m/s)
-
-% Time parameters
-T_g = 2 * pi * m_proton / (q_proton * B0); % Gyration period
-dt = T_g / 100;           % Time step (s)
-t_end = 300000 * T_g;     % End time (simulate for 100000 gyrations)
-t = 0:dt:t_end;          
-n_steps = length(t);      % Number of time steps for iteration
-
-% Arrays to store position and velocity
-x = zeros(n_steps, 3);   
-v = zeros(n_steps, 3);  
-
-% Initial conditions
-x(1, :) = r0;
-v(1, :) = v0;
-
-% Initialize particle hit counter
-particle_hit_count = 0;
-
-% Boris integration
-for i = 1:n_steps-1
-    % Half-step position update
-    x_mid = x(i, :) + 0.5 * dt * v(i, :);
-    
-    % Calculate magnetic field at midpoint (combined dipole and quadrupole)
-    % [Br, Btheta, Bphi] = combined_field(x_mid, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
-    [Br, Btheta, Bphi] = OTD(r, B0, RN);
-    [Bx, By, Bz] = sph2cart_field(Br, Btheta, Bphi, x_mid);
-    B = [Bx, By, Bz];
-    
-    % Boris rotation step
-    t_b = (q_proton / m_proton) * 0.5 * dt * B;
-    v_minus = v(i, :) + dt * 0.5 * q_proton * [0, 0, 0] / m_proton; % No electric field
-    
-    % Rotation due to magnetic field
-    v_prime = v_minus + cross(v_minus, t_b); 
-    v_plus = v_minus + 2 / (1 + norm(t_b)^2) * cross(v_prime, t_b);
-    v(i+1, :) = v_plus + 0.5 * dt * q_proton * [0, 0, 0] / m_proton; % No electric field
-    x(i+1, :) = x_mid + 0.5 * dt * v(i+1, :);
-    
-    % Check if the particle is within 1 RN of Neptune's center
-    if norm(x(i+1, :)) <= RN
-        particle_hit_count = particle_hit_count + 1;
-    end
-end
-
-% Normalize positions in terms of Neptune radii
-x_RN = x / RN;
-
-% ====================================================================================
-% PLOTTING MAGNETIC FIELD LINES WITH ROTATION AXIS
-% ====================================================================================
-
-% Create a grid for magnetic field lines
-[x_grid, y_grid, z_grid] = meshgrid(-20:1:20, -20:1:20, -20:1:20); % Grid in RN units
-x_grid = x_grid * RN;
-y_grid = y_grid * RN;
-z_grid = z_grid * RN;
-
-% Compute magnetic field at each grid point
-Bx_grid = zeros(size(x_grid));
-By_grid = zeros(size(y_grid));
-Bz_grid = zeros(size(z_grid));
-for i = 1:size(x_grid, 1)
-    for j = 1:size(x_grid, 2)
-        for k = 1:size(x_grid, 3)
-            r = [x_grid(i, j, k), y_grid(i, j, k), z_grid(i, j, k)];
-            [Br, Btheta, Bphi] = OTD(r, B0, RN);
-            % [Br, Btheta, Bphi] = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
-            [Bx_grid(i, j, k), By_grid(i, j, k), Bz_grid(i, j, k)] = sph2cart_field(Br, Btheta, Bphi, r);
-        end
-    end
-end
-
-% Plot trajectory
+% Field lines and Boris Algorithm
 figure(4);
-hold on;
-
-% Plot Neptune
-[x_neptune, y_neptune, z_neptune] = sphere;
-surf(x_neptune, y_neptune, z_neptune, 'FaceAlpha', 0.3, 'EdgeColor', 'none', 'FaceColor', 'blue');
-
-% Add rotation axis (dark green line)
-plot3([0 0], [0 0], [-3 3], 'Color', [0 0.5 0], 'LineWidth', 1);
-
-% Define starting points for magnetic field lines
-num_streamlines = 100;
-theta = linspace(0, 2*pi, num_streamlines);
-radius = 5 * RN;
-startx = radius * cos(theta);
-starty = radius * sin(theta);
-startz = .5 * RN * ones(size(startx)); % Slightly above equator
-
-% Plot magnetic field lines
-streamline_color = 'r';
-
-for i = 1:num_streamlines
-    h = streamline(x_grid / RN, y_grid / RN, z_grid / RN, Bx_grid, By_grid, Bz_grid, startx(i) / RN, starty(i) / RN, startz(i) / RN);
-    g = streamline(x_grid / RN, y_grid / RN, z_grid / RN, -1 * Bx_grid, -1 * By_grid, -1 * Bz_grid, startx(i) / RN, starty(i) / RN, startz(i) / RN);
-    hnegz = streamline(x_grid / RN, y_grid / RN, z_grid / RN, Bx_grid, By_grid, Bz_grid, startx(i) / RN, starty(i) / RN, -1 * startz(i) / RN);
-    gnegz = streamline(x_grid / RN, y_grid / RN, z_grid / RN, -1 * Bx_grid, -1 * By_grid, -1 * Bz_grid, startx(i) / RN, starty(i) / RN, -1 * startz(i) / RN);
-    
-    % Set properties for the streamlines
-    set(h, 'Color', streamline_color, 'LineWidth', 1);
-    set(g, 'Color', streamline_color, 'LineWidth', 1);
-    set(hnegz, 'Color', streamline_color, 'LineWidth', 1);
-    set(gnegz, 'Color', streamline_color, 'LineWidth', 1);
-end
-
-% Add labels and grid
-xlabel('x (R_N)');
-ylabel('y (R_N)');
-zlabel('z (R_N)');
-title('Neptune Dipole + Quadrupole Field with Rotation Axis');
-grid on;
-view(3);
-axis equal;
-
-% Set axis limits
-axis([-15 15 -15 15 -15 15]);
-
-% Display results
-fprintf('Gyration period: %.3e s\n', T_g);
-fprintf('Simulation time: %.3e s\n', t_end);
-fprintf('Total particle collisions with Neptune: %d\n', particle_hit_count);
-
-% Helper function to convert spherical field components to cartesian at a position
-function [Bx, By, Bz] = sph2cart_field(Br, Btheta, Bphi, r)
-    x = r(1); y = r(2); z = r(3);
-    r_mag = norm(r);
-    theta = acos(z/r_mag);
-    phi = atan2(y,x);
-    
-    Bx = Br*sin(theta)*cos(phi) + Btheta*cos(theta)*cos(phi) - Bphi*sin(phi);
-    By = Br*sin(theta)*sin(phi) + Btheta*cos(theta)*sin(phi) + Bphi*cos(phi);
-    Bz = Br*cos(theta) - Btheta*sin(theta);
-end
+mfield_lines(B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+% boris_algo(B0, RN, q_proton, m_proton, g10, g11, h11, g20, g21, h21, g22, h22);
