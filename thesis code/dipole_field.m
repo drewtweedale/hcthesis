@@ -1,28 +1,45 @@
-function [Br, Btheta, Bphi] = dipole_field(r, RN, varargin)
+function [Br, Btheta, Bphi] = dipole_field(r, theta, phi, RN, B0)
     % Convert position to spherical coordinates
-    x = r(1); y = r(2); z = r(3);
-    r_mag = norm(r);
-    theta = acos(z/r_mag);
-    phi = atan2(y,x);
-    
-    if nargin == 3
-        % Simple axial dipole case
-        B0 = varargin{1};
+    offset = [0.17, 0.46, -.24] * RN;
+    x = r(1) - offset(1); y = r(2) - offset(2); z = r(3) - offset(3);
+    B0 = -B0;
         
-        % Standard dipole field equations (Jackson Classical Electrodynamics)
-        Br = 2*B0*(RN^3/r_mag^3)*cos(theta);
-        Btheta = B0*(RN^3/r_mag^3)*sin(theta);
-        Bphi = 0;
-    else
-        % Tilted dipole using Schmidt-normalized coefficients
-        B0 = varargin{1};
-        g10 = varargin{2};
-        g11 = varargin{3};
-        h11 = varargin{4};
-        
-        % Proper spherical harmonic expansion for dipole
-        Br = B0*(RN^3/r_mag^3)*(2*g10*cos(theta) + 2*(g11*cos(phi) + h11*sin(phi))*sin(theta));
-        Btheta = B0*(RN^3/r_mag^3)*(g10*sin(theta) - (g11*cos(phi) + h11*sin(phi))*cos(theta));
-        Bphi = B0*(RN^3/r_mag^3)*(g11*sin(phi) - h11*cos(phi));
-    end
+    % Rotation angles
+    tilt_y = -deg2rad(46.8);     % Counterclockwise rotation about y-axis.
+    tilt_z = -deg2rad(259.5);     % Clockwise rotation about z-axis
+
+    % Rotation matrices (global frame)
+    Ry = [cos(tilt_y), 0, sin(tilt_y);
+         0, 1, 0;
+         -sin(tilt_y), 0, cos(tilt_y)];
+
+    Rz = [cos(tilt_z), -sin(tilt_z), 0;
+          sin(tilt_z),  cos(tilt_z), 0;
+          0, 0, 1];
+
+    % Combine into a single rotation matrix (applied to positions)
+    R = Rz * Ry;  
+
+    % Apply inverse rotation to position (rotate r into dipole frame)
+    r_rot = R' * [x; y; z];  
+
+    % Now compute B-field in dipole-aligned frame
+    x_r = r_rot(1);
+    y_r = r_rot(2);
+    z_r = r_rot(3);
+    r_mag_r = norm(r_rot);
+    scale = (r_mag_r / RN)^3 * r_mag_r^2;
+
+    Bx = (-3 * B0 * x_r * z_r) / scale;
+    By = (-3 * B0 * y_r * z_r) / scale;
+    Bz = (B0 * (x_r^2 + y_r^2 - 2 * z_r^2)) / scale;
+
+    % Rotate B back into original (rotated dipole) frame
+    B_rot = R * [Bx; By; Bz];
+
+    % Convert to spherical field components
+    B = cart2sph_field(B_rot(1), B_rot(2), B_rot(3), theta, phi);
+    Br = B(1);
+    Btheta = B(2);
+    Bphi = B(3);
 end

@@ -11,7 +11,12 @@ function mfield_lines(B0, RN, g10, g11, h11, g20, g21, h21, g22, h22)
         for j = 1:size(x_grid, 2)
             for k = 1:size(x_grid, 3)
                 r = [x_grid(i,j,k), y_grid(i,j,k), z_grid(i,j,k)];
-                [Br, Btheta, Bphi] = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+                phi = atan2(r(2), r(1));
+                r_mag = norm(r);
+                theta = acos(r(3)/r_mag);
+                % [Br, Btheta, Bphi] = new_comb(r, theta, phi, RN);
+                % [Br, Btheta, Bphi] = combined_field(r, theta, phi, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+                [Br, Btheta, Bphi] = dipole_field(r, theta, phi, RN, B0);
                 B = sph2cart_field(Br, Btheta, Bphi, r);  % Get single output
                 Bx_grid(i,j,k) = B(1);  % Assign components separately
                 By_grid(i,j,k) = B(2);

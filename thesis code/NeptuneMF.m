@@ -7,21 +7,16 @@ clean_data = data(~invalid_rows,:);
 % Parameters
 q_proton = 1.6e-19;       % (C)
 m_proton = 1.67e-27;      % (kg)
-B0 = 1.42e-5;             % Magnetic field strength at Neptune's equator (T)
+B0 = 1.33e-5;             % Magnetic field strength at Neptune's equator (T)
 RN = 24765e3;             % Neptune radius (m)
-g10 =  0.09732; 
-g11 =  0.03220; 
-h11 = -0.09889;
-g20 =  0.07448; 
-g21 =  0.00664; 
-h21 =  0.11230;
-g22 =  0.04499; 
-h22 = -0.00070;
-
-% Rotation parameters
-rotation_period = 16.11 * 3600;  % Convert to seconds. 
-omega = 2 * pi / rotation_period; %
-t_ref = datetime(1989, 8, 25, 3, 56, 0); 
+g10 =  0.09732 * 10^(-4); 
+g11 =  0.03220 * 10^(-4); 
+h11 = -0.09889 * 10^(-4);
+g20 =  0.07448 * 10^(-4); 
+g21 =  0.00664 * 10^(-4); 
+h21 =  0.11230 * 10^(-4);
+g22 =  0.04499 * 10^(-4); 
+h22 = -0.00070 * 10^(-4);
 
 % Extract cleaned data
 year = 1900 + clean_data(:,1);  
@@ -36,29 +31,34 @@ Btheta_meas = clean_data(:,11); Bphi_meas = clean_data(:,12);
 time_datetime = datetime(year, 1, doy) + hours(hour) + minutes(minute) + ...
                 seconds(second) + milliseconds(millisecond);
 
-% Coordinate conversion
+% Longitude (W), converted to phi component.
 phi = mod(360 - longitude, 360); 
-theta = 90 - latitude; 
-[x,y,z] = sph2cart(deg2rad(phi), deg2rad(theta), range_RN*RN);
-positions = [x,y,z]; 
+phi_rad = deg2rad(phi);
 
-% Rotate positions
-positions_rot = zeros(size(positions));
-for i = 1:length(time_datetime)
-    t_elapsed = seconds(time_datetime(i) - t_ref);
-    delta_phi = omega * t_elapsed;
-    R = [cos(delta_phi), -sin(delta_phi), 0;
-         sin(delta_phi),  cos(delta_phi), 0;
-         0,              0,              1];
-    positions_rot(i, :) = (R * positions(i, :)')';
-end
+% Latitude converted to theta (measured from Z axis)
+theta = 90-latitude; 
+theta_rad = deg2rad(theta);
+
+[x,y,z] = sph2cartcoord(phi_rad, theta_rad, range_RN*RN);
+positions = [x,y,z]; 
 
 % Field comparison
 B_meas = sqrt(Br_meas.^2 + Btheta_meas.^2 + Bphi_meas.^2);
 B_model = zeros(length(range_RN),3);
 for i = 1:length(range_RN)
-    r = positions_rot(i,:)'; 
-    [Br_mod, Btheta_mod, Bphi_mod] = combined_field(r, B0, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+    % Given position
+    r = positions(i,:)';
+
+    % Models: uncomment the desired model.
+
+    % Dipole + quadrupole code derived from Victor's B-field derivations.
+    % [Br_mod, Btheta_mod, Bphi_mod] = new_comb(r, theta_rad(i), phi_rad(i), RN);
+    
+    % Drew's dipole + quadrupole implementation.
+    % [Br_mod, Btheta_mod, Bphi_mod] = combined_field(r, theta, phi, RN, g10, g11, h11, g20, g21, h21, g22, h22);
+    
+    % OTD model.
+    [Br_mod, Btheta_mod, Bphi_mod] = dipole_field(r, theta_rad(i), phi_rad(i), RN, B0);
     B_model(i,:) = [Br_mod, Btheta_mod, Bphi_mod];
 end
 B_model_mag = sqrt(sum(B_model.^2,2));
@@ -70,7 +70,7 @@ end_time = ceil(max(time_hours));
 
 % Figure 1: Voyager 2 Trajectory
 figure(1);
-plot3(positions_rot(:,1)/RN, positions_rot(:,2)/RN, positions_rot(:,3)/RN, 'b-', 'LineWidth', 2);
+plot3(positions(:,1)/RN, positions(:,2)/RN, positions(:,3)/RN, 'b-', 'LineWidth', 2);
 hold on;
 [x_neptune, y_neptune, z_neptune] = sphere(50);
 surf(x_neptune, y_neptune, z_neptune, 'FaceAlpha', 0.3, 'EdgeColor', 'none', 'FaceColor', 'blue');
@@ -80,22 +80,18 @@ title('Voyager 2 Trajectory in Neptune-Fixed Coordinates');
 grid on; view(45,30); axis equal;
 
 % Figure 2: Field Magnitude Comparison
+% Figure 2: Field Magnitude Comparison (log scale)
 figure(2);
-plot(time_hours, B_meas, 'b-', 'LineWidth', 2);
+semilogy(time_hours, B_meas, 'b-', 'LineWidth', 2);
 hold on;
-plot(time_hours, B_model_mag*1e9, 'r--', 'LineWidth', 2);
-
-% Mark closest approach
-[~, idx_min] = min(range_RN);
-ca_time = time_hours(idx_min);
-xline(ca_time, '--g', sprintf('CA: %.1f hours', ca_time), 'LabelVerticalAlignment', 'top');
+semilogy(time_hours, B_model_mag*1e9, 'r--', 'LineWidth', 2);
 
 xlabel('Hours Since 1989-08-24T18:00:00');
 ylabel('|B| (nT)');
 title('Magnetic Field Strength Comparison');
 legend('Voyager 2', 'Model', 'Location', 'best');
 grid on;
-xlim([start_time end_time]);
+xlim([start_time 20]);
 
 % Figure 3: Component-wise Comparison
 figure(3);
